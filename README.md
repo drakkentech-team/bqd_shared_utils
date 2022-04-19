@@ -8,6 +8,8 @@ make sure to run the following command from the parent directory:
 
 ```git submodule update --init --recursive```
 
+Should this fail to work and you get git fingerprint issues, clone the submodule to another directory and copy the files into the parent module directory.
+
 ### Update ###
 To get updates for this submodule, run the following command
 from the parent directory:
