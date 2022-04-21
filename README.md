@@ -8,7 +8,11 @@ make sure to run the following command from the parent directory:
 
 ```git submodule update --init --recursive```
 
-Should this fail to work and you get git fingerprint issues, clone the submodule to another directory and copy the files into the parent module directory.
+Troubleshooting:
+    - Make sure you have access writes on Github.
+    - Should this fail to work and you get git fingerprint issues, you need to register yourr ssh key.
+        1. Generate an ssh key on your system if it doesn't exist.
+        2. Add your public ssh key to your Github account that has access to the submodule.
 
 ### Update ###
 To get updates for this submodule, run the following command
