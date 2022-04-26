@@ -21,6 +21,12 @@ class MyTestCase(unittest.TestCase):
 
         test_result = run_unittests(test_file)
         self.assertTrue(test_result.wasSuccessful(), "Some tests failed")
+        
+    def test_all_staging_coding(self):
+        test_file = "tests.ftp.test_staging"
+
+        test_result = run_unittests(test_file)
+        self.assertTrue(test_result.wasSuccessful(), "Some tests failed")
 
 
 if __name__ == "__main__":
