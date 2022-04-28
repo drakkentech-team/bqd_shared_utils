@@ -9,7 +9,8 @@ make sure to run the following command from the parent directory:
 ```git submodule update --init --recursive```
 
 Troubleshooting:
-    - Make sure you have access writes on Github.
+    - Make sure you have access writes on Github to all modules and submodules.
+    - If you still get a permission denied error, run the command "ssh -T git@github.com" and enter "yes" on a fingerprint dialog.
     - Should this fail to work and you get git fingerprint issues, you need to register yourr ssh key.
         1. Generate an ssh key on your system if it doesn't exist.
         2. Add your public ssh key to your Github account that has access to the submodule.
