@@ -1,5 +1,11 @@
 import mysql.connector as c
-from config import db_connect
+
+try:
+    from config import db_connect
+except ImportError:
+    from connect.settings import db_connect
+
+
 from typing import Tuple, List
 from itertools import chain
 
