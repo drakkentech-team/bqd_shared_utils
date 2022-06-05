@@ -6,7 +6,7 @@ except ImportError:
     from connect.settings import db_connect
 
 
-from typing import Tuple, List
+from typing import Tuple, List, Union, Dict
 from itertools import chain
 
 
@@ -52,3 +52,38 @@ def get_flat_column_data(table: str, column: str, where: str = None, where_value
     return list(chain(*data))
 
 
+def make_where(records_to_match: Union[List[Dict], Dict]) -> Tuple[str, Tuple]:
+    """
+    make a prepared where statement to match to either to a list of records or to a single record
+    """
+
+    if type(records_to_match) == dict:
+        return make_single_where(records_to_match)
+    elif type(records_to_match) == list and len(records_to_match):
+        return make_multi_where(records_to_match)
+
+
+def make_single_where(record: Dict) -> Tuple[str, Tuple]:
+    statements, values = [], []
+    for k, v in record.items():
+        if v is None:
+            statement = f"{k} is null"
+        else:
+            statement = f"{k} = %s"
+            values.append(v)
+        statements.append(statement)
+    return "WHERE (" + " AND ".join(statements) + ")", tuple(values)
+
+
+def make_multi_where(record: List[Dict]) -> Tuple[str, Tuple]:
+    keys = record[0].keys()
+    wheres = []
+    where_values = []
+    for k in keys:
+        phs = []  # placeholders
+        for r in record:
+            where_values.append(r[k])
+            phs.append("%s")
+        wheres.append(f"{k} in ({', '.join(phs)})")
+    where = f"WHERE ({' AND '.join(wheres)})"
+    return where, tuple(where_values)

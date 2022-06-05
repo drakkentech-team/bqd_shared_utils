@@ -48,7 +48,10 @@ def filter_docs_to_delete(sql_get_basic_data_func, product_sid, existing_docs, a
         total_item_sids = reduce_items(total_item_sids, adding_items_already_provided)
 
     filtered_list = []
-    for doc in existing_docs[::-1]:
+    # rearrange the list by when the email was received, with newest first
+    # reverse_chrono_existing_docs = sorted(existing_docs, key=lambda r: r[4])[::-1]
+
+    for doc in existing_docs:
         doc_sid = doc[0]
         related_items = sql_get_basic_data_func("item_doc", "item_sid", f"WHERE doc_sid = {doc_sid}")
         related_item_sids = [tup[0] for tup in related_items]
