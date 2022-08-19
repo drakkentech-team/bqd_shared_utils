@@ -1,4 +1,6 @@
 import mysql.connector as c
+import logging
+from typing import Union
 
 try:
     from config import db_connect
@@ -21,8 +23,8 @@ def connect(host, user, password, database, port):
 
 
 def get_data(table: str, columns: str, join: str = None, where: str = None, order: str = None, pre: str = "",
-             post: str = "", get_columns: bool = False, debug: bool = False, where_values: Tuple = ()) \
-        -> Tuple[List[List], List]:
+             post: str = "", get_columns: bool = False, debug: bool = False, where_values: Tuple = (),
+             flatten_columns: bool = False) -> Tuple[List[List], List]:
     """
     retreive data from columns in table, filtered by a where statement
     """
@@ -40,6 +42,14 @@ def get_data(table: str, columns: str, join: str = None, where: str = None, orde
     my_cursor.execute(sql, where_values)
     data = my_cursor.fetchall()
     field_names = [i[0] for i in my_cursor.description] if get_columns else None
+
+    if flatten_columns and data:
+        columns = [[] for column in data[0]]
+        for record in data:
+            for i, value in enumerate(record):
+                columns[i].append(value)
+        data = columns
+
     return data, field_names
 
 
@@ -87,3 +97,190 @@ def make_multi_where(record: List[Dict]) -> Tuple[str, Tuple]:
         wheres.append(f"{k} in ({', '.join(phs)})")
     where = f"WHERE ({' AND '.join(wheres)})"
     return where, tuple(where_values)
+
+
+def list_to_tuple(list_in: list, placeholder=None, add_quotes=False):
+    out = "("
+    if not list_in:
+        return "()"
+    q = "'" if add_quotes else ""
+
+    for e in list_in[:-1]:
+        out = out + q + str((placeholder or e)) + q + ", "
+    out = out + q + str((placeholder or list_in[-1])) + q + ")"
+    return out
+
+
+def insert(table_name: str, record: Union[dict, list[dict]], debug: bool = False, return_record: bool = False):
+    """ Inserts new records into a mySql table
+
+    if a list of records are given, many will be inserted, else just one
+
+    Args:
+        table_name:
+        record:         a dict with keys corresponding to field names in mySql
+                        OR a list of such dicts
+        debug:
+
+    """
+    if not record:
+        return
+
+    db = connect(*db_connect)
+    my_cursor = db.cursor(prepared=True)
+
+    cols = list(record.keys()) if type(record) == dict else list(record[0].keys())
+    sql = f'''INSERT INTO {table_name} {list_to_tuple(cols)} VALUES {list_to_tuple(cols, placeholder='%s')}'''
+
+    if type(record) == dict:
+        values = tuple([record[k] for k in cols])
+        log_sql(sql, values, debug)
+        my_cursor.execute(sql, values)
+    else:
+        values = [tuple([row[k] for k in cols]) for row in record]
+        for v in values:
+            log_sql(sql, v, debug)
+        my_cursor.executemany(sql, values)
+
+    db.commit()
+
+    if return_record:
+        return get_inserted_records(table_name, record, debug)
+
+
+def get_inserted_records(table_name: str, record: Union[Dict, List[Dict]], debug: bool = False) -> List[Dict]:
+    """ gets the records that was inserted into a mySql table, with any automatic
+        and defualt field values that may have been assigned
+
+    """
+    if type(record) == list:
+        statements, values = [], []
+        for i in record:
+            add_statements, add_values = make_wheres(i)
+            statements.append(add_statements)
+            values += values + add_values
+        where = "WHERE " + " OR ".join(statements)
+        where_values = tuple(values)
+
+    else:
+        where, where_values = make_wheres(record)
+        where = f"WHERE {where}"
+
+    data = get_ordered_data(table_name, "*", where=where, where_values=tuple(where_values), debug=debug)
+    return data
+
+
+def log_sql(statement, values, debug):
+    i, msg = 0, statement
+    if type(values) == tuple:
+        while msg.find("%s") != -1:
+            msg = msg.replace("%s", str(values[i]), 1)
+            i += 1
+    elif values is None:
+        msg = statement
+    else:
+        msgs = []
+        for r in values:
+            s, i = statement, 0
+            while s.find("%s") != -1:
+                s = s.replace("%s", str(r[i]), 1)
+                i += 1
+            msgs.append(s)
+        msg = "\n".join(msgs)
+    if debug:
+        logging.info(f"SQL is \n\t\t{msg}\n")
+
+
+def make_wheres(record: Dict) -> Tuple[str, List]:
+    statements, values = [], []
+    for k, v in record.items():
+        if v is None:
+            statement = f"{k} is null"
+        else:
+            statement = f"{k} = %s"
+            values.append(v)
+        statements.append(statement)
+    return "(" + " AND ".join(statements) + ")", values
+
+
+def get_ordered_data(table: str, columns: str, join: str = None, where: str = None, order: str = None,
+                     pre: str = "", post: str = "", debug: bool = False, where_values: Tuple = ()) -> List[dict]:
+    """
+    makes a list of objects (as is used in javascript) out of that which is drawn out of sql
+
+    args:
+        table: str      the sql table where the data comes from
+        columns: str    a string listing the columns wanted, e.g. "name, ref" or "*"
+        join:           a join statement
+        where: str      a where statement, such as "WHERE sid = 5", can also be ""
+        order: str      a ORDER statement, such as "ORDER by sid"
+        where_values:   the values that should be substituted into the where
+
+    kwargs:
+        debug: bool     do you want to print some feedback?
+
+    returns:
+        ordered_data: list[dict]    a list with dictionaries where each row in the sql table
+                                    is a dictionary, the sql columns are its keys, and the
+                                    values in the sql table are the keys' values
+    """
+
+    data, field_names = get_data(table, columns, join, where=where, order=order, get_columns=True, pre=pre, post=post,
+                                 debug=debug, where_values=where_values)
+    ordered_data = []
+    for line in data:
+        record = convert_two_lists_to_dict(field_names, line)
+        ordered_data.append(record)
+    return ordered_data
+
+
+def convert_two_lists_to_dict(keys: list, values: list) -> dict:
+    """
+    makes a dictionary with keys and values
+    obviously, keys and values must be in matching order and of matching
+    length
+    """
+
+    output = {}
+    for i, j in zip(keys, values):
+        output[i] = j
+    return output
+
+
+def update(table_name: str, record: Union[dict, List[dict]], debug: bool = False, primary_key: str = 'sid'):
+    """ Updates records in a mySql table
+
+        if a list of records are given, many will be inserted, else just one
+        Note: records must have a key 'sid' with a valid value
+
+        Args:
+            table_name:
+            record:         a dict with keys corresponding to field names in mySql
+                            OR a list of such dicts
+            debug:
+
+        """
+    if not record:
+        return
+
+    db = connect(*db_connect)
+    my_cursor = db.cursor(prepared=True)
+    if type(record) == dict:
+        updates = ", ".join([str(col) + " = %s " for col, val in record.items()])
+        where_values = [val for col, val in record.items()]
+        sql = f"UPDATE {table_name} SET {updates} WHERE {primary_key} = %s"
+        where_values.append(record.get('sid'))
+        log_sql(sql, tuple(where_values), debug)
+        my_cursor.execute(sql, tuple(where_values))
+
+    else:
+        updates = ", ".join([str(col) + " = %s " for col, val in record[0].items()])
+        sql = f"UPDATE {table_name} SET {updates} WHERE {primary_key} = %s"
+        values = []
+        for r in record:
+            where_values = [val for col, val in r.items()]
+            where_values.append(r.get('sid'))
+            values.append(tuple(where_values))
+        log_sql(sql, values, debug)
+        my_cursor.executemany(sql, values)
+    db.commit()
