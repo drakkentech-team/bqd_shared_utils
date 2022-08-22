@@ -1,6 +1,6 @@
 import mysql.connector as c
 import logging
-from typing import Union
+from typing import Union, List
 
 try:
     from config import db_connect
@@ -111,7 +111,8 @@ def list_to_tuple(list_in: list, placeholder=None, add_quotes=False):
     return out
 
 
-def insert(table_name: str, record: Union[dict, list[dict]], debug: bool = False, return_record: bool = False):
+def insert(table_name: str, record: Union[dict, list[dict]], debug: bool = False, return_record: bool = False,
+           match_keys: str = None):
     """ Inserts new records into a mySql table
 
     if a list of records are given, many will be inserted, else just one
@@ -145,25 +146,26 @@ def insert(table_name: str, record: Union[dict, list[dict]], debug: bool = False
     db.commit()
 
     if return_record:
-        return get_inserted_records(table_name, record, debug)
+        return get_inserted_records(table_name, record, keys=match_keys, debug=debug)
 
 
-def get_inserted_records(table_name: str, record: Union[Dict, List[Dict]], debug: bool = False) -> List[Dict]:
+def get_inserted_records(table_name: str, record: Union[Dict, List[Dict]], keys: List[str] = None,
+                         debug: bool = False) -> List[Dict]:
     """ gets the records that was inserted into a mySql table, with any automatic
-        and defualt field values that may have been assigned
-
+        and defualt field values that may have been assigned,
+        if a list of keys is specified, the match will be based on only the listed keys
     """
     if type(record) == list:
         statements, values = [], []
         for i in record:
-            add_statements, add_values = make_wheres(i)
+            add_statements, add_values = make_wheres(i, keys)
             statements.append(add_statements)
             values += values + add_values
         where = "WHERE " + " OR ".join(statements)
         where_values = tuple(values)
 
     else:
-        where, where_values = make_wheres(record)
+        where, where_values = make_wheres(record, keys)
         where = f"WHERE {where}"
 
     data = get_ordered_data(table_name, "*", where=where, where_values=tuple(where_values), debug=debug)
@@ -191,9 +193,15 @@ def log_sql(statement, values, debug):
         logging.info(f"SQL is \n\t\t{msg}\n")
 
 
-def make_wheres(record: Dict) -> Tuple[str, List]:
+def make_wheres(record: Dict, keys: List[str] = None) -> Tuple[str, List]:
+    """
+    make a prepared sql WHERE statement to match given record exactly
+    if a list of keys is provided, the where will be based on only the listed keys
+    """
     statements, values = [], []
     for k, v in record.items():
+        if keys and k not in keys:
+            continue
         if v is None:
             statement = f"{k} is null"
         else:

@@ -55,6 +55,13 @@ def make_logger(format: str = None, level: str = "info", location: str = None, d
     return logger
 
 
+def delete_file_if_exist(files):
+    if type(files) != list:
+        files = [files]
+    for file in files:
+        if os.path.exists(file):
+            os.remove(file)
+
 
 
 
