@@ -24,12 +24,16 @@ def connect(host, user, password, database, port):
 
 def get_data(table: str, columns: str, join: str = None, where: str = None, order: str = None, pre: str = "",
              post: str = "", get_columns: bool = False, debug: bool = False, where_values: Tuple = (),
-             flatten_columns: bool = False) -> Tuple[List[List], List]:
+             flatten_columns: bool = False, db_override: tuple = None) -> Tuple[List[List], List]:
     """
     retreive data from columns in table, filtered by a where statement
     """
 
-    db = connect(*db_connect)
+    if not db_override:
+        db = connect(*db_connect)
+    else:
+        db = connect(*db_override)
+
     if where:
         where = where.replace(" = 'None'", " is null")
     sql = f"{pre}SELECT {columns} FROM {table} {join if join else ''} { where if where else ''} " \
@@ -41,7 +45,7 @@ def get_data(table: str, columns: str, join: str = None, where: str = None, orde
     my_cursor = db.cursor(prepared=True)
     my_cursor.execute(sql, where_values)
     data = my_cursor.fetchall()
-    field_names = [i[0] for i in my_cursor.description] if get_columns else None
+    field_names = [i[0] for i in my_cursor.description] if (get_columns and data) else None
 
     if flatten_columns and data:
         columns = [[] for column in data[0]]
@@ -62,25 +66,29 @@ def get_flat_column_data(table: str, column: str, where: str = None, where_value
     return list(chain(*data))
 
 
-def make_where(records_to_match: Union[List[Dict], Dict]) -> Tuple[str, Tuple]:
+def make_where(records_to_match: Union[List[Dict], Dict], tolerant_strings: bool = False) -> Tuple[str, Tuple]:
     """
     make a prepared where statement to match to either to a list of records or to a single record
     """
 
     if type(records_to_match) == dict:
-        return make_single_where(records_to_match)
+        return make_single_where(records_to_match, tolerant_strings)
     elif type(records_to_match) == list and len(records_to_match):
         return make_multi_where(records_to_match)
 
 
-def make_single_where(record: Dict) -> Tuple[str, Tuple]:
+def make_single_where(record: Dict, tolerant_strings: bool = False) -> Tuple[str, Tuple]:
     statements, values = [], []
     for k, v in record.items():
         if v is None:
             statement = f"{k} is null"
         else:
-            statement = f"{k} = %s"
-            values.append(v)
+            statement = f"{k} like %s"
+            if tolerant_strings and type(v) == str:
+                values.append(f"%{v}%")
+            else:
+                values.append(v)
+
         statements.append(statement)
     return "WHERE (" + " AND ".join(statements) + ")", tuple(values)
 
@@ -212,7 +220,8 @@ def make_wheres(record: Dict, keys: List[str] = None) -> Tuple[str, List]:
 
 
 def get_ordered_data(table: str, columns: str, join: str = None, where: str = None, order: str = None,
-                     pre: str = "", post: str = "", debug: bool = False, where_values: Tuple = ()) -> List[dict]:
+                     pre: str = "", post: str = "", debug: bool = False, where_values: Tuple = (),
+                     db_override: tuple = None) -> List[dict]:
     """
     makes a list of objects (as is used in javascript) out of that which is drawn out of sql
 
@@ -234,7 +243,7 @@ def get_ordered_data(table: str, columns: str, join: str = None, where: str = No
     """
 
     data, field_names = get_data(table, columns, join, where=where, order=order, get_columns=True, pre=pre, post=post,
-                                 debug=debug, where_values=where_values)
+                                 debug=debug, where_values=where_values, db_override=db_override)
     ordered_data = []
     for line in data:
         record = convert_two_lists_to_dict(field_names, line)
