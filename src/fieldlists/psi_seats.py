@@ -3,7 +3,7 @@ psi_seats_1 = [
     # Sourcing
     'date', 'sourcing_office', 'qe_group', 'qe_name', 'email_qe',
     # Supplier Identification
-    'supplier_boss_code', 'supplier_name', 'factory', 'factory_address', 'email_sup',
+    'supplier_boss_code', 'supplier_sislvendor_code', 'supplier_name', 'factory', 'factory_address', 'email_sup',
     # Product Destination
     'subsidiary', 'chk_brd_France', 'chk_brd_Italy', 'chk_brd_Croatia', 'chk_brd_Switzerland', 'chk_brd_Austria', 'chk_brd_Spain', 'chk_brd_Portugal', 'chk_brd_Turkey', 'chk_brd_Australia', 'chk_brd_CzechRepublic', 'chk_brd_NewZealand', 'chk_brd_UK', 'chk_brd_Germany', 'chk_brd_SouthAfrica', 'chk_brd_Romania', 'chk_brd_Hungary', 'chk_brd_Poland', 'chk_brd_Bulgaria', 'chk_brd_Slovakia', 'chk_brd_Serbia',
     # Identification Comment
