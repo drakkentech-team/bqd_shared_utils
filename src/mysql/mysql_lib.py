@@ -1,6 +1,6 @@
 import mysql.connector as c
 import logging
-from typing import Union, List
+from bqd_shared_utils.src.general.utils import log
 
 try:
     from config import db_connect
@@ -66,30 +66,49 @@ def get_flat_column_data(table: str, column: str, where: str = None, where_value
     return list(chain(*data))
 
 
-def make_where(records_to_match: Union[List[Dict], Dict], tolerant_strings: bool = False) -> Tuple[str, Tuple]:
+def make_where(records_to_match: Union[List[Dict], Dict], tolerant_strings: bool = False,
+               case_insensitive: bool = False, force_case_sensitive: bool = False,
+               logger=None) -> Tuple[str, Tuple]:
     """
     make a prepared where statement to match to either to a list of records or to a single record
     """
 
     if type(records_to_match) == dict:
-        return make_single_where(records_to_match, tolerant_strings)
+        return make_single_where(records_to_match, tolerant_strings, case_insensitive, force_case_sensitive, logger)
     elif type(records_to_match) == list and len(records_to_match):
         return make_multi_where(records_to_match)
 
 
-def make_single_where(record: Dict, tolerant_strings: bool = False) -> Tuple[str, Tuple]:
+def make_single_where(record: Dict, tolerant_strings: bool = False, case_insensitive: bool = False,
+                      force_case_sensitive: bool = False, logger=None) -> Tuple[str, Tuple]:
     statements, values = [], []
     for k, v in record.items():
         if v is None:
             statement = f"{k} is null"
+        elif type(v) == list:
+            if len(v) == 0:
+                log('WARNING: empty list of values encountered in make_single_where', logger, 'warning')
+                continue
+            statement, phs = '', []  # placeholders
+            for r in record:
+                values.append(r[k])
+                phs.append("%s")
+            statement = f"{k} in ({', '.join(phs)})"
         else:
-            statement = f"{k} like %s"
+            upper_pre = 'UPPER(' if case_insensitive and type(v) == str else ''
+            upper_post = ')' if case_insensitive and type(v) == str else ''
             if tolerant_strings and type(v) == str:
-                values.append(f"%{v}%")
+                binary = 'BINARY ' if force_case_sensitive else ''
+                statement = f"{upper_pre}{k}{upper_post} like {binary}%s"
+                values.append(f"%{v.upper() if case_insensitive else v}%")
             else:
+                statement = f"{k} = {upper_pre}%s{upper_post}"
                 values.append(v)
 
         statements.append(statement)
+    if len(statements) == 0:
+        log('WARNING: tried to make a where but no valid conditions resulted!', logger, 'warning')
+        return '', ()
     return "WHERE (" + " AND ".join(statements) + ")", tuple(values)
 
 

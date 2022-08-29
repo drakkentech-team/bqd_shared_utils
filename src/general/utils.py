@@ -1,5 +1,6 @@
 import os
 import logging
+import re
 
 
 def replace_illegal_characters(string: str):
@@ -63,6 +64,19 @@ def delete_file_if_exist(files):
             os.remove(file)
 
 
+def remove_non_ascii_char(text):
+    return re.sub(r'[^\x00-\x7F]+', ' ', text)
 
 
-
+def log(msg, logger=None, level='info'):
+    if logger is not None:
+        if level == 'error':
+            logger.error(msg)
+        elif level == 'warning':
+            logger.warning(msg)
+        elif level == 'debug':
+            logger.debug(msg)
+        else:
+            logger.info(msg)
+    else:
+        print(msg)
