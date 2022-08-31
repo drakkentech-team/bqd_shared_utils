@@ -90,8 +90,8 @@ def make_single_where(record: Dict, tolerant_strings: bool = False, case_insensi
                 log('WARNING: empty list of values encountered in make_single_where', logger, 'warning')
                 continue
             statement, phs = '', []  # placeholders
-            for r in record:
-                values.append(r[k])
+            for r in v:
+                values.append(r)
                 phs.append("%s")
             statement = f"{k} in ({', '.join(phs)})"
         else:
