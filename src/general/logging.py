@@ -1,4 +1,7 @@
 from os import getcwd, path
+from datetime import datetime
+from json import dumps
+import pytz
 from glob import glob
 
 
@@ -22,6 +25,20 @@ def collate_logfiles(target_directory: str = None, output_filename: str = None):
             count += 1
     print(f'combined {count} files into {output_filename}')
     target.close()
+
+
+def log_deletion(data: dict, source: str, action: str, filename: str, detail: dict):
+    deletion_log = path.join(getcwd(), 'deletions.log')
+    op = 'a' if path.isfile(deletion_log) else 'w'
+    now = datetime.utcnow().replace(tzinfo=pytz.utc)
+    now_string = now.strftime('%Y-%m-%d %H:%M:%S %Z')
+    data_string = dumps(data, indent='\t', default=str)
+    detail_string = dumps(detail, indent='\t', default=str)
+    msg = f'{now_string}: {source} deleted {filename} during action {action}\n>> The data is:\n{data_string}' \
+          f'\n>> The detail is {detail_string}' \
+          f'\n ********************************************\n'
+    with open(deletion_log, op) as f:
+        f.write(msg)
 
 
 if __name__ == '__main__':
