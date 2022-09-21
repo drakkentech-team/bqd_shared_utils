@@ -1,3 +1,4 @@
+from pickle import NONE
 import mysql.connector as c
 import logging
 from bqd_shared_utils.src.general.utils import log
@@ -94,6 +95,24 @@ def make_single_where(record: Dict, tolerant_strings: bool = False, case_insensi
                 values.append(r)
                 phs.append("%s")
             statement = f"{k} in ({', '.join(phs)})"
+        elif type(v) == dict:
+            inner_statement = []
+            for ik, iv in v.items():
+                if iv is None:
+                    log(f"WARNING: {iv} in {ik} is null", logger, 'warning')
+                elif type(iv) == str:
+                    if tolerant_strings:
+                        values.append('%' + iv + '%')
+                        inner_statement.append(f'{ik} LIKE %s')
+                    else:
+                        values.append(iv)
+                        inner_statement.append(f'{ik} = %s')
+                else:
+                    values.append(iv)
+                    inner_statement.append(f'{ik} = %s')
+            
+            if len(inner_statement) > 0:
+                statement = '(' + ' OR '.join(inner_statement) + ')'
         else:
             upper_pre = 'UPPER(' if case_insensitive and type(v) == str else ''
             upper_post = ')' if case_insensitive and type(v) == str else ''
@@ -109,8 +128,8 @@ def make_single_where(record: Dict, tolerant_strings: bool = False, case_insensi
     if len(statements) == 0:
         log('WARNING: tried to make a where but no valid conditions resulted!', logger, 'warning')
         return '', ()
-    return "WHERE (" + " AND ".join(statements) + ")", tuple(values)
 
+    return "WHERE (" + " AND ".join(statements) + ")", tuple(values)
 
 def make_multi_where(record: List[Dict]) -> Tuple[str, Tuple]:
     keys = record[0].keys()
