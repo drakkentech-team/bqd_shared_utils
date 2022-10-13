@@ -1,6 +1,7 @@
 import os
 import logging
 import re
+from typing import Union
 
 
 def replace_illegal_characters(string: str):
@@ -32,6 +33,20 @@ def replace_illegal_characters(string: str):
     string = string.replace('=', "_")
 
     return string
+
+
+def make_safe_filename(name_in: Union[str, bytes], max_length: int = 130, encoding: str = 'utf-8'):
+    if type(name_in) != str:
+        filename = name_in.decode(encoding)
+
+    new_name = replace_illegal_characters(name_in)
+
+    if len(new_name) > max_length:
+        f_name, file_extension = os.path.splitext(new_name)
+        new_name = new_name[:(max_length-10)] + file_extension
+
+    return new_name
+
 
 
 def make_logger(format: str = None, level: str = "info", location: str = None, date_format: str = None,
