@@ -34,8 +34,8 @@ def log_deletion(data: dict, source: str, action: str, filename: str, detail: di
     now_string = now.strftime('%Y-%m-%d %H:%M:%S %Z')
     data_string = dumps(data, indent='\t', default=str)
     detail_string = dumps(detail, indent='\t', default=str)
-    msg = f'{now_string}: {source} deleted {filename} during action {action}\n>> The data is:\n{data_string}' \
-          f'\n>> The detail is {detail_string}' \
+    msg = f'{now_string}: {source} deleted {filename} during action {action}\n>> The data (being deleted) is:\n{data_string}' \
+          f'\n>> The (replacement) detail is {detail_string}' \
           f'\n ********************************************\n'
     with open(deletion_log, op) as f:
         f.write(msg)

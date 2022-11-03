@@ -54,7 +54,7 @@ def get_data(table: str, columns: str, join: str = None, where: str = None, orde
             for i, value in enumerate(record):
                 columns[i].append(value)
         data = columns
-
+    my_cursor.close()
     return data, field_names
 
 
@@ -190,6 +190,7 @@ def insert(table_name: str, record: Union[dict, list[dict]], debug: bool = False
         my_cursor.executemany(sql, values)
 
     db.commit()
+    my_cursor.close()
 
     if return_record:
         return get_inserted_records(table_name, record, keys=match_keys, debug=debug)
@@ -339,3 +340,18 @@ def update(table_name: str, record: Union[dict, List[dict]], debug: bool = False
         log_sql(sql, values, debug)
         my_cursor.executemany(sql, values)
     db.commit()
+    my_cursor.close()
+
+
+def set_column_value(table_name: str, column_name: str, value, condition: str = 'sid > 0', debug: bool = False):
+    db = connect(*db_connect)
+    my_cursor = db.cursor(prepared=True)
+    sql = f'''UPDATE
+    {table_name}
+    SET
+    {column_name} = %s
+    WHERE
+    {condition}'''
+    my_cursor.execute(sql, (value, ))
+    db.commit()
+    my_cursor.close()
