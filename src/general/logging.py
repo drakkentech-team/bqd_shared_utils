@@ -1,8 +1,9 @@
-from os import getcwd, path
+from os import getcwd, path, remove
 from datetime import datetime
 from json import dumps
 import pytz
 from glob import glob
+import logging
 
 
 def collate_logfiles(target_directory: str = None, output_filename: str = None):
@@ -39,6 +40,42 @@ def log_deletion(data: dict, source: str, action: str, filename: str, detail: di
           f'\n ********************************************\n'
     with open(deletion_log, op) as f:
         f.write(msg)
+
+
+def make_logger(format: str = None, level: str = "info", location: str = None, date_format: str = None,
+                 delete_previous: bool = True) -> logging.Logger:
+
+    location = location or (getcwd() + "\logfile.log")
+    if delete_previous and path.exists(location):
+        remove(location)
+
+    format = format or '%(asctime)s : %(levelname)s : %(name)s : %(message)s'
+    date_format = date_format or '%m/%d/%Y %H:%M:%S'
+    level = {"debug": logging.DEBUG, "info": logging.INFO, "warning": logging.WARNING, "error": logging.ERROR}[level]
+
+    logging.basicConfig(level=level, format=format, datefmt=date_format)
+    logger = logging.getLogger(__name__)
+    logger.setLevel(level)
+    file_handler = logging.FileHandler(location)
+    formatter = logging.Formatter(format, "%Y-%m-%d %H:%M:%S")
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+
+    return logger
+
+
+def log(msg, logger=None, level='info'):
+    if logger is not None:
+        if level == 'error':
+            logger.error(msg)
+        elif level == 'warning':
+            logger.warning(msg)
+        elif level == 'debug':
+            logger.debug(msg)
+        else:
+            logger.info(msg)
+    else:
+        print(msg)
 
 
 if __name__ == '__main__':
