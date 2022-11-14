@@ -1,7 +1,7 @@
 from pickle import NONE
 import mysql.connector as c
 import logging
-from bqd_shared_utils.src.general.utils import log
+from bqd_shared_utils.src.general.logging import log
 
 try:
     from config import db_connect
