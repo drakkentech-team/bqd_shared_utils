@@ -2,6 +2,9 @@ from pickle import NONE
 import mysql.connector as c
 import logging
 from bqd_shared_utils.src.general.logging import log
+from mysql.connector.errors import OperationalError, InterfaceError
+from time import sleep
+
 
 try:
     from config import db_connect
@@ -24,6 +27,19 @@ def connect(host, user, password, database, port):
 
 
 def get_data(table: str, columns: str, join: str = None, where: str = None, order: str = None, pre: str = "",
+             post: str = "", get_columns: bool = False, debug: bool = False, where_values: Tuple = (),
+             flatten_columns: bool = False, db_override: tuple = None) -> Tuple[List[List], List]:
+    try:
+        return _get_data(table, columns, join, where, order, pre, post, get_columns, debug, where_values,
+                         flatten_columns, db_override)
+    except (OperationalError, InterfaceError) as e:
+        print(f'Got some error! {e}')
+        sleep(30)
+        return _get_data(table, columns, join, where, order, pre, post, get_columns, debug, where_values,
+                         flatten_columns, db_override)
+
+
+def _get_data(table: str, columns: str, join: str = None, where: str = None, order: str = None, pre: str = "",
              post: str = "", get_columns: bool = False, debug: bool = False, where_values: Tuple = (),
              flatten_columns: bool = False, db_override: tuple = None) -> Tuple[List[List], List]:
     """
@@ -158,6 +174,17 @@ def list_to_tuple(list_in: list, placeholder=None, add_quotes=False):
 
 
 def insert(table_name: str, record: Union[dict, list[dict]], debug: bool = False, return_record: bool = False,
+           match_keys: str = None):
+    try:
+        _insert(table_name, record, debug, return_record, match_keys)
+    except (MySQLInterfaceError, OperationalError, InterfaceError) as e:
+        print(f'Error! {e}')
+        print('but we wont panic, well wait 30s and try again')
+        sleep(30)
+        _insert(table_name, record, debug, return_record, match_keys)
+
+
+def _insert(table_name: str, record: Union[dict, list[dict]], debug: bool = False, return_record: bool = False,
            match_keys: str = None):
     """ Inserts new records into a mySql table
 
