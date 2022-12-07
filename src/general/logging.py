@@ -42,19 +42,19 @@ def log_deletion(data: dict, source: str, action: str, filename: str, detail: di
         f.write(msg)
 
 
-def make_logger(format: str = None, level: str = "info", location: str = None, date_format: str = None,
+def make_logger(name: str = None, format: str = None, level: str = "info", location: str = None, date_format: str = None,
                  delete_previous: bool = True) -> logging.Logger:
 
     location = location or (getcwd() + "\logfile.log")
     if delete_previous and path.exists(location):
         remove(location)
 
-    format = format or '%(asctime)s : %(levelname)s : %(name)s : %(message)s'
+    format = format or '%(asctime)s : %(levelname)s : %(message)s'
     date_format = date_format or '%m/%d/%Y %H:%M:%S'
     level = {"debug": logging.DEBUG, "info": logging.INFO, "warning": logging.WARNING, "error": logging.ERROR}[level]
 
     logging.basicConfig(level=level, format=format, datefmt=date_format)
-    logger = logging.getLogger(__name__)
+    logger = logging.getLogger(name or __name__)
     logger.setLevel(level)
     file_handler = logging.FileHandler(location)
     formatter = logging.Formatter(format, "%Y-%m-%d %H:%M:%S")
