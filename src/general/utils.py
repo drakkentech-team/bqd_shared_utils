@@ -1,5 +1,6 @@
 import os
 import re
+import shutil
 from typing import Union
 
 
@@ -58,3 +59,40 @@ def delete_file_if_exist(files):
 def remove_non_ascii_char(text):
     return re.sub(r'[^\x00-\x7F]+', ' ', text)
 
+
+def rename_file_if_exists(full_path_and_name: str):
+
+    filename = os.path.basename(full_path_and_name)
+    directory = os.path.dirname(full_path_and_name)
+
+    # Separate base from extension
+    base, extension = os.path.splitext(filename)
+
+    # Initial new name
+    new_name = full_path_and_name
+
+    # If folder basedir/base does not exist... You don't want to create it?
+    if not os.path.exists(new_name):
+        return new_name
+    else:  # folder exists, file exists as well
+        ii = 1
+        while True:
+            if ii < 99:
+                new_name = os.path.join(directory, base, base + "_" + ('0' + str(ii))[-2:] + extension)
+            else:
+                new_name = os.path.join(directory, base, base + "_" + str(ii) + extension)
+            if not os.path.exists(new_name):
+                return new_name
+            ii += 1
+
+
+def wipe_directory_contents(target_directory):
+    for filename in os.listdir(target_directory):
+        file_path = os.path.join(target_directory, filename)
+        try:
+            if os.path.isfile(file_path) or os.path.islink(file_path):
+                os.unlink(file_path)
+            elif os.path.isdir(file_path):
+                shutil.rmtree(file_path)
+        except Exception as e:
+            print('Failed to delete %s. Reason: %s' % (file_path, e))

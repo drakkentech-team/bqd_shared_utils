@@ -3,6 +3,7 @@ import mysql.connector as c
 import logging
 from bqd_shared_utils.src.general.logging import log
 from mysql.connector.errors import OperationalError, InterfaceError
+from _mysql_connector import MySQLInterfaceError
 from time import sleep
 
 
@@ -352,7 +353,7 @@ def update(table_name: str, record: Union[dict, List[dict]], debug: bool = False
         updates = ", ".join([str(col) + " = %s " for col, val in record.items()])
         where_values = [val for col, val in record.items()]
         sql = f"UPDATE {table_name} SET {updates} WHERE {primary_key} = %s"
-        where_values.append(record.get('sid'))
+        where_values.append(record.get(primary_key))
         log_sql(sql, tuple(where_values), debug)
         my_cursor.execute(sql, tuple(where_values))
 
@@ -362,7 +363,7 @@ def update(table_name: str, record: Union[dict, List[dict]], debug: bool = False
         values = []
         for r in record:
             where_values = [val for col, val in r.items()]
-            where_values.append(r.get('sid'))
+            where_values.append(r.get(primary_key))
             values.append(tuple(where_values))
         log_sql(sql, values, debug)
         my_cursor.executemany(sql, values)
