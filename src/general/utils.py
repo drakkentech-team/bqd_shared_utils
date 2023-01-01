@@ -96,3 +96,8 @@ def wipe_directory_contents(target_directory):
                 shutil.rmtree(file_path)
         except Exception as e:
             print('Failed to delete %s. Reason: %s' % (file_path, e))
+
+
+def make_directory_if_not_exist(full_path: str):
+    if not os.path.isdir(full_path):
+        os.makedirs(full_path)
