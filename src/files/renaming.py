@@ -1,5 +1,9 @@
 from os import path
 import connect.mysql_connect as sql
+import itertools as IT
+import tempfile
+
+
 
 def get_filename_renamed(filename, the_path):
     """
@@ -20,3 +24,32 @@ def get_filename_renamed(filename, the_path):
         return (base_name[:46] + f" ({i})" if i > 0 else base_name[:50]) + file_extension
     else:
         return filename
+
+
+def uniquify(t_path, pre_sep=' (', post_sep=")"):
+    if not path.exists(t_path):
+        return t_path
+
+    basename = path.splitext(t_path)[0]
+    extension = path.splitext(t_path)[1]
+    i = 1
+    while path.exists(f"{basename}{pre_sep}{i}{post_sep}{extension}"):
+        i += 1
+    return f"{basename}{pre_sep}{i}{post_sep}{extension}"
+
+    # def name_sequence():
+    #     count = IT.count()
+    #     yield ''
+    #     while True:
+    #         yield '{pres}{n:d}{posts}'.format(pres=pre_sep, n=next(count)+1, posts=post_sep)
+    # orig = tempfile._name_sequence
+    # with tempfile._once_lock:
+    #     tempfile._name_sequence = name_sequence()
+    #     t_path = path.normpath(t_path)
+    #     dirname, basename = path.split(t_path)
+    #     filename, ext = path.splitext(basename)
+    #     fd, filename = tempfile.mkstemp(dir=dirname, prefix=filename, suffix=ext)
+    #     tempfile._name_sequence = orig
+
+    return filename
+
