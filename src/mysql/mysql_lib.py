@@ -332,6 +332,15 @@ def convert_two_lists_to_dict(keys: list, values: list) -> dict:
 
 
 def update(table_name: str, record: Union[dict, List[dict]], debug: bool = False, primary_key: str = 'sid'):
+    try:
+        _update(table_name, record, debug, primary_key)
+    except BaseException as e:
+        print(f"got error {e} trying to call sql update!")
+        sleep(30)
+        _update(table_name, record, debug, primary_key)
+
+
+def _update(table_name: str, record: Union[dict, List[dict]], debug: bool = False, primary_key: str = 'sid'):
     """ Updates records in a mySql table
 
         if a list of records are given, many will be inserted, else just one

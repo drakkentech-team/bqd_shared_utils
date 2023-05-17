@@ -78,7 +78,7 @@ def rename_file_if_exists(full_path_and_name: str):
         ii = 1
         while True:
             if ii < 99:
-                new_name = os.path.join(directory, base, base + "_" + ('0' + str(ii))[-2:] + extension)
+                new_name = os.path.join(directory, base + "_" + ('0' + str(ii))[-2:] + extension)
             else:
                 new_name = os.path.join(directory, base, base + "_" + str(ii) + extension)
             if not os.path.exists(new_name):

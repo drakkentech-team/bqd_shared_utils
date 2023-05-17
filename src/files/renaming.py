@@ -26,16 +26,21 @@ def get_filename_renamed(filename, the_path):
         return filename
 
 
-def uniquify(t_path, pre_sep=' (', post_sep=")"):
-    if not path.exists(t_path):
+def uniquify(t_path, pre_sep=' (', post_sep=")", file_list: list = None):
+    if not path.exists(t_path) and file_list is None:
         return t_path
 
     basename = path.splitext(t_path)[0]
     extension = path.splitext(t_path)[1]
     i = 1
-    while path.exists(f"{basename}{pre_sep}{i}{post_sep}{extension}"):
-        i += 1
-    return f"{basename}{pre_sep}{i}{post_sep}{extension}"
+    if file_list is None:
+        while path.exists(f"{basename}{pre_sep}{i}{post_sep}{extension}"):
+            i += 1
+        return f"{basename}{pre_sep}{i}{post_sep}{extension}"
+    else:
+        while f"{basename}{pre_sep}{i}{post_sep}{extension}" in file_list:
+            i += 1
+        return f"{basename}{pre_sep}{i}{post_sep}{extension}"
 
     # def name_sequence():
     #     count = IT.count()
