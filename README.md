@@ -2,6 +2,18 @@
 This is a sub-module for Bluerock Quality Database!
 These will be modules and functions in common across larger modules.
 
+Specfically, it includes a useful mysql library that makes connecting to mysql 
+a bit ~nicer~
+
+However, when you use this SQL stuff you should be aware that the right package
+to install is
+
+```pip install mysql-connector-python```
+
+Also, for it to work, you'll need a config.py file in your root like
+with a valid db connect tuple like
+```("<server_address>", <"username">, <"password">, "<default_db>", <port_no>)```
+
 ### Setup ###
 When cloning a parent module with this one inside of it,
 make sure to run the following command from the parent directory:
