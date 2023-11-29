@@ -75,6 +75,12 @@ def _get_data(table: str, columns: str, join: str = None, where: str = None, ord
     return data, field_names
 
 
+def execute_statement(sql_statement: str, placeholder_vals: tuple, connection):
+    my_cursor = connection.cursor(prepared=True)
+    my_cursor.execute(sql_statement, placeholder_vals)
+    data = my_cursor.fetchall()
+    return data
+
 def get_flat_column_data(table: str, column: str, where: str = None, where_values: Tuple = ()):
     """
     get data from column in table and flatten it
