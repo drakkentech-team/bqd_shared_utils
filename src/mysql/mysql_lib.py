@@ -75,14 +75,16 @@ def _get_data(table: str, columns: str, join: str = None, where: str = None, ord
     return data, field_names
 
 
-def execute_statement(sql_statement: str, placeholder_vals: tuple, connection, commit = True):
+def execute_statement(sql_statement: str, placeholder_vals: tuple, connection, commit = True, fetch = False):
     my_cursor = connection.cursor(prepared=True)
     my_cursor.execute(sql_statement, placeholder_vals)
-    data = my_cursor.fetchall()
     
+    data = []
     if commit:
         print("I am committing!")
         connection.commit()
+    if fetch:
+        data = my_cursor.fetchall()
 
     my_cursor.close()
     
