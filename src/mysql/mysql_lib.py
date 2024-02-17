@@ -80,8 +80,7 @@ def execute_statement(sql_statement: str, placeholder_vals: tuple, connection, c
     my_cursor.execute(sql_statement, placeholder_vals)
     
     data = []
-    if commit:
-        print("I am committing!")
+    if commit:        
         connection.commit()
     if fetch:
         data = my_cursor.fetchall()
