@@ -406,3 +406,31 @@ def set_column_value(table_name: str, column_name: str, value, condition: str = 
     my_cursor.execute(sql, (value, ))
     db.commit()
     my_cursor.close()
+
+def delete_record_by_id(table_name: str, id_value, id_column: str = 'sid', debug: bool = False):
+    try:
+        _delete_record_by_id(table_name, id_value, id_column, debug)
+    except (MySQLInterfaceError, OperationalError, InterfaceError) as e:
+        print(f'Error! {e}')
+        print('but we wont panic, well wait 30s and try again')
+        sleep(30)
+        _delete_record_by_id(table_name, id_value, id_column, debug)
+
+
+def _delete_record_by_id(table_name: str, id_value, id_column: str = 'sid', debug: bool = False):
+    """
+    Deletes a record from a table based on the provided ID value
+
+    Args:
+        table_name: str      the name of the table from which to delete the record
+        id_value:           the value of the ID column for the record to be deleted
+        id_column: str      the name of the ID column (default is 'sid')
+        debug: bool         indicates whether to print debug information
+    """
+    db = connect(*db_connect)
+    my_cursor = db.cursor(prepared=True)
+    sql = f"DELETE FROM {table_name} WHERE {id_column} = %s"
+    log_sql(sql, (id_value,), debug)
+    my_cursor.execute(sql, (id_value,))
+    db.commit()
+    my_cursor.close()
