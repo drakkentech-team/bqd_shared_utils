@@ -29,20 +29,20 @@ def connect(host, user, password, database, port):
 
 def get_data(table: str, columns: str, join: str = None, where: str = None, order: str = None, pre: str = "",
              post: str = "", get_columns: bool = False, debug: bool = False, where_values: Tuple = (),
-             flatten_columns: bool = False, db_override: tuple = None) -> Tuple[List[List], List]:
+             flatten_columns: bool = False, db_override: tuple = None, limit: int = None, offset: int = None) -> Tuple[List[List], List]:
     try:
         return _get_data(table, columns, join, where, order, pre, post, get_columns, debug, where_values,
-                         flatten_columns, db_override)
+                         flatten_columns, db_override, limit, offset)
     except (OperationalError, InterfaceError) as e:
         print(f'Got some error! {e}')
         sleep(30)
         return _get_data(table, columns, join, where, order, pre, post, get_columns, debug, where_values,
-                         flatten_columns, db_override)
+                         flatten_columns, db_override, limit, offset)
 
 
 def _get_data(table: str, columns: str, join: str = None, where: str = None, order: str = None, pre: str = "",
              post: str = "", get_columns: bool = False, debug: bool = False, where_values: Tuple = (),
-             flatten_columns: bool = False, db_override: tuple = None) -> Tuple[List[List], List]:
+             flatten_columns: bool = False, db_override: tuple = None, limit: int = None, offset: int = None) -> Tuple[List[List], List]:
     """
     retreive data from columns in table, filtered by a where statement
     """
@@ -54,8 +54,14 @@ def _get_data(table: str, columns: str, join: str = None, where: str = None, ord
 
     if where:
         where = where.replace(" = 'None'", " is null")
-    sql = f"{pre}SELECT {columns} FROM {table} {join if join else ''} { where if where else ''} " \
-          f"{order if order else ''}{post}"
+        
+    sql = f"{pre} SELECT {columns} FROM {table}" \
+      f" {join if join else ''}" \
+      f" {where if where else ''}" \
+      f" {order if order else ''}" \
+      f" {f'LIMIT {limit}' if limit else ''}" \
+      f" {f'OFFSET {offset}' if offset else ''}" \
+      f"{post}"
 
     if debug:
         print(f"\nSQL is \n{sql} \n with where values {where_values}")
@@ -302,7 +308,7 @@ def make_wheres(record: Dict, keys: List[str] = None) -> Tuple[str, List]:
 
 def get_ordered_data(table: str, columns: str, join: str = None, where: str = None, order: str = None,
                      pre: str = "", post: str = "", debug: bool = False, where_values: Tuple = (),
-                     db_override: tuple = None) -> List[dict]:
+                     db_override: tuple = None, limit: int = None, offset: int = None) -> List[dict]:
     """
     makes a list of objects (as is used in javascript) out of that which is drawn out of sql
 
@@ -324,7 +330,7 @@ def get_ordered_data(table: str, columns: str, join: str = None, where: str = No
     """
 
     data, field_names = get_data(table, columns, join, where=where, order=order, get_columns=True, pre=pre, post=post,
-                                 debug=debug, where_values=where_values, db_override=db_override)
+                                 debug=debug, where_values=where_values, db_override=db_override, limit=limit, offset=offset)
     ordered_data = []
     for line in data:
         record = convert_two_lists_to_dict(field_names, line)
@@ -434,3 +440,35 @@ def _delete_record_by_id(table_name: str, id_value, id_column: str = 'sid', debu
     my_cursor.execute(sql, (id_value,))
     db.commit()
     my_cursor.close()
+
+    
+def get_table_count(table_name: str, debug: bool = False) -> int:
+    """
+    Retrieves the count of rows in a table in the MySQL database.
+
+    Args:
+        table_name: str     the name of the table to retrieve the count from
+        debug: bool         indicates whether to print debug information
+
+    Returns:
+        count: int          the count of rows in the specified table
+    """
+    try:
+        db = connect(*db_connect)
+        my_cursor = db.cursor()
+        sql = f"SELECT COUNT(*) FROM {table_name}"
+        if debug:
+            print(f"SQL Query: {sql}")
+
+        my_cursor.execute(sql)
+        count = my_cursor.fetchone()[0]
+        if debug:
+            print(f"Count of rows in {table_name}: {count}")
+
+        my_cursor.close()
+        return count
+    except (MySQLInterfaceError, OperationalError, InterfaceError) as e:
+        print(f'Error! {e}')
+        print('but we wont panic, well wait 30s and try again')
+        sleep(30)
+        return get_table_count(table_name, debug)
