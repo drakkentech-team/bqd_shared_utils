@@ -5,6 +5,8 @@ from bqd_shared_utils.src.general.logging import log
 from mysql.connector.errors import OperationalError, InterfaceError
 from _mysql_connector import MySQLInterfaceError
 from time import sleep
+import sys
+import traceback
 
 
 try:
@@ -34,7 +36,10 @@ def get_data(table: str, columns: str, join: str = None, where: str = None, orde
         return _get_data(table, columns, join, where, order, pre, post, get_columns, debug, where_values,
                          flatten_columns, db_override, limit, offset)
     except (OperationalError, InterfaceError) as e:
-        print(f'Got some error! {e}')
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        tb_str = '\n'.join(traceback.format_tb(exc_traceback))
+        detail = f"Exception Type: {exc_type}\nException Value: {exc_value}\nTraceback: {tb_str}"
+        print(f'Got some error! {e}\n{detail}')
         sleep(30)
         return _get_data(table, columns, join, where, order, pre, post, get_columns, debug, where_values,
                          flatten_columns, db_override, limit, offset)
@@ -47,53 +52,71 @@ def _get_data(table: str, columns: str, join: str = None, where: str = None, ord
     retreive data from columns in table, filtered by a where statement
     """
 
-    if not db_override:
-        db = connect(*db_connect)
-    else:
-        db = connect(*db_override)
+    try:
+        if not db_override:
+            db = connect(*db_connect)
+        else:
+            db = connect(*db_override)
 
-    if where:
-        where = where.replace(" = 'None'", " is null")
-        
-    sql = f"{pre} SELECT {columns} FROM {table}" \
-      f" {join if join else ''}" \
-      f" {where if where else ''}" \
-      f" {order if order else ''}" \
-      f" {f'LIMIT {limit}' if limit else ''}" \
-      f" {f'OFFSET {offset}' if offset else ''}" \
-      f"{post}"
+        if where:
+            where = where.replace(" = 'None'", " is null")
 
-    if debug:
-        print(f"\nSQL is \n{sql} \n with where values {where_values}")
+        sql = f"{pre} SELECT {columns} FROM {table}" \
+          f" {join if join else ''}" \
+          f" {where if where else ''}" \
+          f" {order if order else ''}" \
+          f" {f'LIMIT {limit}' if limit else ''}" \
+          f" {f'OFFSET {offset}' if offset else ''}" \
+          f"{post}"
 
-    my_cursor = db.cursor(prepared=True)
-    my_cursor.execute(sql, where_values)
-    data = my_cursor.fetchall()
-    field_names = [i[0] for i in my_cursor.description] if (get_columns and data) else None
+        if debug:
+            print(f"\nSQL is \n{sql} \n with where values {where_values}")
 
-    if flatten_columns and data:
-        columns = [[] for column in data[0]]
-        for record in data:
-            for i, value in enumerate(record):
-                columns[i].append(value)
-        data = columns
-    my_cursor.close()
-    return data, field_names
+        my_cursor = db.cursor(prepared=True)
+        my_cursor.execute(sql, where_values)
+        data = my_cursor.fetchall()
+        field_names = [i[0] for i in my_cursor.description] if (get_columns and data) else None
+
+        if flatten_columns and data:
+            columns = [[] for column in data[0]]
+            for record in data:
+                for i, value in enumerate(record):
+                    columns[i].append(value)
+            data = columns
+        my_cursor.close()
+        return data, field_names
+    except BaseException as e:
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        tb_str = '\n'.join(traceback.format_tb(exc_traceback))
+        detail = f"Exception Type: {exc_type}\nException Value: {exc_value}\nTraceback: {tb_str}"
+        print(f'Got some error! {e}\n{detail}')
+        raise e
+    finally:
+        my_cursor.close()
 
 
 def execute_statement(sql_statement: str, placeholder_vals: tuple, connection, commit = True, fetch = False):
-    my_cursor = connection.cursor(prepared=True)
-    my_cursor.execute(sql_statement, placeholder_vals)
-    
-    data = []
-    if commit:        
-        connection.commit()
-    if fetch:
-        data = my_cursor.fetchall()
+    try:
+        my_cursor = connection.cursor(prepared=True)
+        my_cursor.execute(sql_statement, placeholder_vals)
 
-    my_cursor.close()
-    
-    return data
+        data = []
+        if commit:
+            connection.commit()
+        if fetch:
+            data = my_cursor.fetchall()
+
+        my_cursor.close()
+
+        return data
+    except BaseException as e:
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        tb_str = '\n'.join(traceback.format_tb(exc_traceback))
+        detail = f"Exception Type: {exc_type}\nException Value: {exc_value}\nTraceback: {tb_str}"
+        print(f'Got some error! {e}\n{detail}')
+        raise e
+    finally:
+        my_cursor.close()
 
 def get_flat_column_data(table: str, column: str, where: str = None, where_values: Tuple = ()):
     """
@@ -218,30 +241,39 @@ def _insert(table_name: str, record: Union[dict, list[dict]], debug: bool = Fals
         debug:
 
     """
-    if not record:
-        return
+    try:
+        if not record:
+            return
 
-    db = connect(*db_connect)
-    my_cursor = db.cursor(prepared=True)
+        db = connect(*db_connect)
+        my_cursor = db.cursor(prepared=True)
 
-    cols = list(record.keys()) if type(record) == dict else list(record[0].keys())
-    sql = f'''INSERT INTO {table_name} {list_to_tuple(cols)} VALUES {list_to_tuple(cols, placeholder='%s')}'''
+        cols = list(record.keys()) if type(record) == dict else list(record[0].keys())
+        sql = f'''INSERT INTO {table_name} {list_to_tuple(cols)} VALUES {list_to_tuple(cols, placeholder='%s')}'''
 
-    if type(record) == dict:
-        values = tuple([record[k] for k in cols])
-        log_sql(sql, values, debug)
-        my_cursor.execute(sql, values)
-    else:
-        values = [tuple([row[k] for k in cols]) for row in record]
-        for v in values:
-            log_sql(sql, v, debug)
-        my_cursor.executemany(sql, values)
+        if type(record) == dict:
+            values = tuple([record[k] for k in cols])
+            log_sql(sql, values, debug)
+            my_cursor.execute(sql, values)
+        else:
+            values = [tuple([row[k] for k in cols]) for row in record]
+            for v in values:
+                log_sql(sql, v, debug)
+            my_cursor.executemany(sql, values)
 
-    db.commit()
-    my_cursor.close()
+        db.commit()
+        my_cursor.close()
 
-    if return_record:
-        return get_inserted_records(table_name, record, keys=match_keys, debug=debug)
+        if return_record:
+            return get_inserted_records(table_name, record, keys=match_keys, debug=debug)
+    except BaseException as e:
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        tb_str = '\n'.join(traceback.format_tb(exc_traceback))
+        detail = f"Exception Type: {exc_type}\nException Value: {exc_value}\nTraceback: {tb_str}"
+        print(f'Got some error! {e}\n{detail}')
+        raise e
+    finally:
+        my_cursor.close()
 
 
 def get_inserted_records(table_name: str, record: Union[Dict, List[Dict]], keys: List[str] = None,
@@ -373,45 +405,63 @@ def _update(table_name: str, record: Union[dict, List[dict]], debug: bool = Fals
             debug:
 
         """
-    if not record:
-        return
+    try:
+        if not record:
+            return
 
-    db = connect(*db_connect)
-    my_cursor = db.cursor(prepared=True)
-    if type(record) == dict:
-        updates = ", ".join([str(col) + " = %s " for col, val in record.items()])
-        where_values = [val for col, val in record.items()]
-        sql = f"UPDATE {table_name} SET {updates} WHERE {primary_key} = %s"
-        where_values.append(record.get(primary_key))
-        log_sql(sql, tuple(where_values), debug)
-        my_cursor.execute(sql, tuple(where_values))
+        db = connect(*db_connect)
+        my_cursor = db.cursor(prepared=True)
+        if type(record) == dict:
+            updates = ", ".join([str(col) + " = %s " for col, val in record.items()])
+            where_values = [val for col, val in record.items()]
+            sql = f"UPDATE {table_name} SET {updates} WHERE {primary_key} = %s"
+            where_values.append(record.get(primary_key))
+            log_sql(sql, tuple(where_values), debug)
+            my_cursor.execute(sql, tuple(where_values))
 
-    else:
-        updates = ", ".join([str(col) + " = %s " for col, val in record[0].items()])
-        sql = f"UPDATE {table_name} SET {updates} WHERE {primary_key} = %s"
-        values = []
-        for r in record:
-            where_values = [val for col, val in r.items()]
-            where_values.append(r.get(primary_key))
-            values.append(tuple(where_values))
-        log_sql(sql, values, debug)
-        my_cursor.executemany(sql, values)
-    db.commit()
-    my_cursor.close()
+        else:
+            updates = ", ".join([str(col) + " = %s " for col, val in record[0].items()])
+            sql = f"UPDATE {table_name} SET {updates} WHERE {primary_key} = %s"
+            values = []
+            for r in record:
+                where_values = [val for col, val in r.items()]
+                where_values.append(r.get(primary_key))
+                values.append(tuple(where_values))
+            log_sql(sql, values, debug)
+            my_cursor.executemany(sql, values)
+        db.commit()
+        my_cursor.close()
+    except BaseException as e:
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        tb_str = '\n'.join(traceback.format_tb(exc_traceback))
+        detail = f"Exception Type: {exc_type}\nException Value: {exc_value}\nTraceback: {tb_str}"
+        print(f'Got some error! {e}\n{detail}')
+        raise e
+    finally:
+        my_cursor.close()
 
 
 def set_column_value(table_name: str, column_name: str, value, condition: str = 'sid > 0', debug: bool = False):
-    db = connect(*db_connect)
-    my_cursor = db.cursor(prepared=True)
-    sql = f'''UPDATE
-    {table_name}
-    SET
-    {column_name} = %s
-    WHERE
-    {condition}'''
-    my_cursor.execute(sql, (value, ))
-    db.commit()
-    my_cursor.close()
+    try:
+        db = connect(*db_connect)
+        my_cursor = db.cursor(prepared=True)
+        sql = f'''UPDATE
+        {table_name}
+        SET
+        {column_name} = %s
+        WHERE
+        {condition}'''
+        my_cursor.execute(sql, (value, ))
+        db.commit()
+        my_cursor.close()
+    except BaseException as e:
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        tb_str = '\n'.join(traceback.format_tb(exc_traceback))
+        detail = f"Exception Type: {exc_type}\nException Value: {exc_value}\nTraceback: {tb_str}"
+        print(f'Got some error! {e}\n{detail}')
+        raise e
+    finally:
+        my_cursor.close()
 
 def delete_record_by_id(table_name: str, id_value, id_column: str = 'sid', debug: bool = False):
     try:
@@ -433,13 +483,23 @@ def _delete_record_by_id(table_name: str, id_value, id_column: str = 'sid', debu
         id_column: str      the name of the ID column (default is 'sid')
         debug: bool         indicates whether to print debug information
     """
-    db = connect(*db_connect)
-    my_cursor = db.cursor(prepared=True)
-    sql = f"DELETE FROM {table_name} WHERE {id_column} = %s"
-    log_sql(sql, (id_value,), debug)
-    my_cursor.execute(sql, (id_value,))
-    db.commit()
-    my_cursor.close()
+
+    try:
+        db = connect(*db_connect)
+        my_cursor = db.cursor(prepared=True)
+        sql = f"DELETE FROM {table_name} WHERE {id_column} = %s"
+        log_sql(sql, (id_value,), debug)
+        my_cursor.execute(sql, (id_value,))
+        db.commit()
+        my_cursor.close()
+    except BaseException as e:
+        exc_type, exc_value, exc_traceback = sys.exc_info()
+        tb_str = '\n'.join(traceback.format_tb(exc_traceback))
+        detail = f"Exception Type: {exc_type}\nException Value: {exc_value}\nTraceback: {tb_str}"
+        print(f'Got some error! {e}\n{detail}')
+        raise e
+    finally:
+        my_cursor.close()
 
     
 def get_table_count(table_name: str, debug: bool = False) -> int:
@@ -472,3 +532,5 @@ def get_table_count(table_name: str, debug: bool = False) -> int:
         print('but we wont panic, well wait 30s and try again')
         sleep(30)
         return get_table_count(table_name, debug)
+    finally:
+        my_cursor.close()
