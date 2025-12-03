@@ -16,6 +16,8 @@ except ImportError:
 
 
 from typing import Tuple, List, Union, Dict
+
+import os
 from itertools import chain
 
 
@@ -27,6 +29,47 @@ def connect(host, user, password, database, port):
     target_db = c.connect(host=host, user=user, password=password, database=database, port=port,
                           auth_plugin='mysql_native_password')
     return target_db
+
+
+STRICT_WHERE_PARAMS = os.getenv("SQL_ENFORCE_WHERE_PARAMS", "false").lower() in {"1", "true", "yes"}
+
+
+def _validate_where_clause(where: str | None, where_values: Tuple | List | None, logger_ref=None):
+    """Basic guard rails for WHERE clauses before executing prepared statements."""
+
+    if not where:
+        return
+
+    placeholder_count = where.count("%s")
+
+    if placeholder_count:
+        if not where_values:
+            raise ValueError(
+                "Parameterized WHERE clause supplied without corresponding where_values."
+            )
+
+        if len(where_values) < placeholder_count:
+            raise ValueError(
+                "Insufficient where_values supplied for parameterized WHERE clause."
+            )
+
+    elif STRICT_WHERE_PARAMS:
+        raise ValueError(
+            "Raw WHERE clause usage is disabled by SQL_ENFORCE_WHERE_PARAMS;"
+            " please provide placeholders and where_values."
+        )
+
+    suspicious_tokens = ("{", "}", "--", "/*", "*/", ";")
+    if any(tok in where for tok in suspicious_tokens):
+        raise ValueError(
+            "Suspicious token detected in WHERE clause; refusing to execute raw SQL."
+        )
+
+    if where.count("'") % 2 == 1:
+        raise ValueError("WHERE clause contains unmatched single quotes; aborting execution.")
+
+    if where.count("\"") % 2 == 1:
+        raise ValueError("WHERE clause contains unmatched double quotes; aborting execution.")
 
 
 def get_data(table: str, columns: str, join: str = None, where: str = None, order: str = None, pre: str = "",
@@ -59,6 +102,7 @@ def _get_data(table: str, columns: str, join: str = None, where: str = None, ord
             db = connect(*db_override)
 
         if where:
+            _validate_where_clause(where, where_values)
             where = where.replace(" = 'None'", " is null")
 
         sql = f"{pre} SELECT {columns} FROM {table}" \
