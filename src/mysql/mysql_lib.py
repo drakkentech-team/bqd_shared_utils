@@ -34,7 +34,7 @@ def connect(host, user, password, database, port):
 STRICT_WHERE_PARAMS = os.getenv("SQL_ENFORCE_WHERE_PARAMS", "false").lower() in {"1", "true", "yes"}
 
 
-def _validate_where_clause(where: str | None, where_values: Tuple | List | None, logger_ref=None):
+def _validate_where_clause(where: Union[str, None], where_values: Union[Tuple, List, None], logger_ref=None):
     """Basic guard rails for WHERE clauses before executing prepared statements."""
 
     if not where:
