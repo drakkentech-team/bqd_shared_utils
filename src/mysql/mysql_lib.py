@@ -1,8 +1,9 @@
 from pickle import NONE
 import mysql.connector as c
+from mysql.connector import pooling
 import logging
 from bqd_shared_utils.src.general.logging import log
-from mysql.connector.errors import OperationalError, InterfaceError
+from mysql.connector.errors import OperationalError, InterfaceError, PoolError
 from _mysql_connector import MySQLInterfaceError
 from time import sleep
 import sys
@@ -20,16 +21,37 @@ from typing import Tuple, List, Union, Dict
 import os
 from itertools import chain
 
+# Global connection pool
+DB_POOL = None
 
 def connect(host, user, password, database, port):
     """
-    connect to a my_sql database
+    Get a connection from the pool, initializing it if necessary.
     """
+    global DB_POOL
+    if DB_POOL is None:
+        try:
+            DB_POOL = pooling.MySQLConnectionPool(
+                pool_name="ithemba_pool",
+                pool_size=20,  # Reasonable size for the pool
+                pool_reset_session=True,
+                host=host,
+                user=user,
+                password=password,
+                database=database,
+                port=port,
+                auth_plugin='mysql_native_password'
+            )
+            logging.info("Initialized MySQL Connection Pool")
+        except Exception as e:
+            logging.error(f"Failed to initialize connection pool: {e}")
+            raise
 
-    target_db = c.connect(host=host, user=user, password=password, database=database, port=port,
-                          auth_plugin='mysql_native_password')
-    return target_db
-
+    try:
+        return DB_POOL.get_connection()
+    except PoolError as e:
+        logging.error(f"Connection pool exhausted: {e}")
+        raise
 
 STRICT_WHERE_PARAMS = os.getenv("SQL_ENFORCE_WHERE_PARAMS", "false").lower() in {"1", "true", "yes"}
 
@@ -78,12 +100,12 @@ def get_data(table: str, columns: str, join: str = None, where: str = None, orde
     try:
         return _get_data(table, columns, join, where, order, pre, post, get_columns, debug, where_values,
                          flatten_columns, db_override, limit, offset)
-    except (OperationalError, InterfaceError) as e:
+    except (OperationalError, InterfaceError, PoolError) as e:
         exc_type, exc_value, exc_traceback = sys.exc_info()
         tb_str = '\n'.join(traceback.format_tb(exc_traceback))
         detail = f"Exception Type: {exc_type}\nException Value: {exc_value}\nTraceback: {tb_str}"
         print(f'Got some error! {e}\n{detail}')
-        sleep(30)
+        sleep(5) # Reduced sleep time
         return _get_data(table, columns, join, where, order, pre, post, get_columns, debug, where_values,
                          flatten_columns, db_override, limit, offset)
 
@@ -94,7 +116,8 @@ def _get_data(table: str, columns: str, join: str = None, where: str = None, ord
     """
     retreive data from columns in table, filtered by a where statement
     """
-
+    db = None
+    my_cursor = None
     try:
         if not db_override:
             db = connect(*db_connect)
@@ -127,7 +150,6 @@ def _get_data(table: str, columns: str, join: str = None, where: str = None, ord
                 for i, value in enumerate(record):
                     columns[i].append(value)
             data = columns
-        my_cursor.close()
         return data, field_names
     except BaseException as e:
         exc_type, exc_value, exc_traceback = sys.exc_info()
@@ -136,10 +158,14 @@ def _get_data(table: str, columns: str, join: str = None, where: str = None, ord
         print(f'Got some error! {e}\n{detail}')
         raise e
     finally:
-        my_cursor.close()
+        if my_cursor:
+            my_cursor.close()
+        if db:
+            db.close()
 
 
 def execute_statement(sql_statement: str, placeholder_vals: tuple, connection, commit = True, fetch = False):
+    my_cursor = None
     try:
         my_cursor = connection.cursor(prepared=True)
         my_cursor.execute(sql_statement, placeholder_vals)
@@ -150,8 +176,6 @@ def execute_statement(sql_statement: str, placeholder_vals: tuple, connection, c
         if fetch:
             data = my_cursor.fetchall()
 
-        my_cursor.close()
-
         return data
     except BaseException as e:
         exc_type, exc_value, exc_traceback = sys.exc_info()
@@ -160,7 +184,8 @@ def execute_statement(sql_statement: str, placeholder_vals: tuple, connection, c
         print(f'Got some error! {e}\n{detail}')
         raise e
     finally:
-        my_cursor.close()
+        if my_cursor:
+            my_cursor.close()
 
 def get_flat_column_data(table: str, column: str, where: str = None, where_values: Tuple = ()):
     """
@@ -268,7 +293,7 @@ def insert(table_name: str, record: Union[dict, list[dict]], debug: bool = False
     except (MySQLInterfaceError, OperationalError, InterfaceError) as e:
         print(f'Error! {e}')
         print('but we wont panic, well wait 30s and try again')
-        sleep(30)
+        sleep(5)
         _insert(table_name, record, debug, return_record, match_keys)
 
 
@@ -285,6 +310,8 @@ def _insert(table_name: str, record: Union[dict, list[dict]], debug: bool = Fals
         debug:
 
     """
+    db = None
+    my_cursor = None
     try:
         if not record:
             return
@@ -306,7 +333,6 @@ def _insert(table_name: str, record: Union[dict, list[dict]], debug: bool = Fals
             my_cursor.executemany(sql, values)
 
         db.commit()
-        my_cursor.close()
 
         if return_record:
             return get_inserted_records(table_name, record, keys=match_keys, debug=debug)
@@ -317,7 +343,10 @@ def _insert(table_name: str, record: Union[dict, list[dict]], debug: bool = Fals
         print(f'Got some error! {e}\n{detail}')
         raise e
     finally:
-        my_cursor.close()
+        if my_cursor:
+            my_cursor.close()
+        if db:
+            db.close()
 
 
 def get_inserted_records(table_name: str, record: Union[Dict, List[Dict]], keys: List[str] = None,
@@ -432,7 +461,7 @@ def update(table_name: str, record: Union[dict, List[dict]], debug: bool = False
         _update(table_name, record, debug, primary_key)
     except BaseException as e:
         print(f"got error {e} trying to call sql update!")
-        sleep(30)
+        sleep(5)
         _update(table_name, record, debug, primary_key)
 
 
@@ -449,6 +478,8 @@ def _update(table_name: str, record: Union[dict, List[dict]], debug: bool = Fals
             debug:
 
         """
+    db = None
+    my_cursor = None
     try:
         if not record:
             return
@@ -474,7 +505,6 @@ def _update(table_name: str, record: Union[dict, List[dict]], debug: bool = Fals
             log_sql(sql, values, debug)
             my_cursor.executemany(sql, values)
         db.commit()
-        my_cursor.close()
     except BaseException as e:
         exc_type, exc_value, exc_traceback = sys.exc_info()
         tb_str = '\n'.join(traceback.format_tb(exc_traceback))
@@ -482,10 +512,15 @@ def _update(table_name: str, record: Union[dict, List[dict]], debug: bool = Fals
         print(f'Got some error! {e}\n{detail}')
         raise e
     finally:
-        my_cursor.close()
+        if my_cursor:
+            my_cursor.close()
+        if db:
+            db.close()
 
 
 def set_column_value(table_name: str, column_name: str, value, condition: str = 'sid > 0', debug: bool = False):
+    db=None
+    my_cursor=None
     try:
         db = connect(*db_connect)
         my_cursor = db.cursor(prepared=True)
@@ -497,7 +532,6 @@ def set_column_value(table_name: str, column_name: str, value, condition: str = 
         {condition}'''
         my_cursor.execute(sql, (value, ))
         db.commit()
-        my_cursor.close()
     except BaseException as e:
         exc_type, exc_value, exc_traceback = sys.exc_info()
         tb_str = '\n'.join(traceback.format_tb(exc_traceback))
@@ -505,7 +539,10 @@ def set_column_value(table_name: str, column_name: str, value, condition: str = 
         print(f'Got some error! {e}\n{detail}')
         raise e
     finally:
-        my_cursor.close()
+        if my_cursor:
+            my_cursor.close()
+        if db:
+            db.close()
 
 def delete_record_by_id(table_name: str, id_value, id_column: str = 'sid', debug: bool = False):
     try:
@@ -513,7 +550,7 @@ def delete_record_by_id(table_name: str, id_value, id_column: str = 'sid', debug
     except (MySQLInterfaceError, OperationalError, InterfaceError) as e:
         print(f'Error! {e}')
         print('but we wont panic, well wait 30s and try again')
-        sleep(30)
+        sleep(5)
         _delete_record_by_id(table_name, id_value, id_column, debug)
 
 
@@ -527,7 +564,8 @@ def _delete_record_by_id(table_name: str, id_value, id_column: str = 'sid', debu
         id_column: str      the name of the ID column (default is 'sid')
         debug: bool         indicates whether to print debug information
     """
-
+    db=None
+    my_cursor=None
     try:
         db = connect(*db_connect)
         my_cursor = db.cursor(prepared=True)
@@ -535,7 +573,6 @@ def _delete_record_by_id(table_name: str, id_value, id_column: str = 'sid', debu
         log_sql(sql, (id_value,), debug)
         my_cursor.execute(sql, (id_value,))
         db.commit()
-        my_cursor.close()
     except BaseException as e:
         exc_type, exc_value, exc_traceback = sys.exc_info()
         tb_str = '\n'.join(traceback.format_tb(exc_traceback))
@@ -543,8 +580,10 @@ def _delete_record_by_id(table_name: str, id_value, id_column: str = 'sid', debu
         print(f'Got some error! {e}\n{detail}')
         raise e
     finally:
-        my_cursor.close()
-
+        if my_cursor:
+            my_cursor.close()
+        if db:
+            db.close()
     
 def get_table_count(table_name: str, debug: bool = False) -> int:
     """
@@ -557,6 +596,8 @@ def get_table_count(table_name: str, debug: bool = False) -> int:
     Returns:
         count: int          the count of rows in the specified table
     """
+    db = None
+    my_cursor = None
     try:
         db = connect(*db_connect)
         my_cursor = db.cursor()
@@ -569,12 +610,15 @@ def get_table_count(table_name: str, debug: bool = False) -> int:
         if debug:
             print(f"Count of rows in {table_name}: {count}")
 
-        my_cursor.close()
         return count
     except (MySQLInterfaceError, OperationalError, InterfaceError) as e:
         print(f'Error! {e}')
         print('but we wont panic, well wait 30s and try again')
-        sleep(30)
+        sleep(5)
         return get_table_count(table_name, debug)
     finally:
-        my_cursor.close()
+        if my_cursor:
+            my_cursor.close()
+        if db:
+            db.close()
+
