@@ -1,13 +1,16 @@
+import os
+import sys
 import unittest
 
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-def run_unittests(test_filename):
+
+def run_unittests(test_filename: str) -> unittest.TestResult:
     """
     Use this method to discover unittests at specified path, and run them
     :param path:
     :return: TestResult
     """
-    import unittest
     loader = unittest.TestLoader()
     suite = loader.loadTestsFromName(test_filename)
 
@@ -21,7 +24,7 @@ class MyTestCase(unittest.TestCase):
 
         test_result = run_unittests(test_file)
         self.assertTrue(test_result.wasSuccessful(), "Some tests failed")
-        
+
     def test_all_staging_coding(self):
         test_file = "tests.ftp.test_staging"
 
@@ -30,4 +33,4 @@ class MyTestCase(unittest.TestCase):
 
 
 if __name__ == "__main__":
-    unittest.main()
+    _ = unittest.main()

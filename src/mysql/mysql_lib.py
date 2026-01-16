@@ -21,10 +21,44 @@ from typing import Tuple, List, Union, Dict
 import os
 from itertools import chain
 
-# Global connection pool
-DB_POOL = None
+POOL_SIZE = int(getenv("MYSQL_POOL_SIZE", "20"))
+POOL_NAME = getenv("MYSQL_POOL_NAME", "ithemba_mysql_lib_pool")
+_db_pool: Optional[pooling.MySQLConnectionPool] = None
+RETRY_BACKOFF_SECONDS = float(getenv("MYSQL_RETRY_BACKOFF_SECONDS", "0.5"))
 
-def connect(host, user, password, database, port):
+
+def _get_pool(
+    host: Optional[str],
+    user: Optional[str],
+    password: Optional[str],
+    database: Optional[str],
+    port: Optional[Union[int, str]],
+) -> pooling.MySQLConnectionPool:
+    global _db_pool
+    if _db_pool is None:
+        if host is None or user is None or password is None or database is None or port is None:
+            raise ValueError("Missing database connection settings.")
+        _db_pool = pooling.MySQLConnectionPool(
+            pool_name=POOL_NAME,
+            pool_size=POOL_SIZE,
+            pool_reset_session=True,
+            host=host,
+            user=user,
+            password=password,
+            database=database,
+            port=port,
+            auth_plugin="mysql_native_password",
+        )
+    return cast(pooling.MySQLConnectionPool, _db_pool)
+
+
+def connect(
+    host: Optional[str],
+    user: Optional[str],
+    password: Optional[str],
+    database: Optional[str],
+    port: Optional[Union[int, str]],
+) -> Any:
     """
     Get a connection from the pool, initializing it if necessary.
     """
