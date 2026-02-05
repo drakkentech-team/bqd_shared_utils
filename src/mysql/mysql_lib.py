@@ -16,8 +16,9 @@ except ImportError:
     from connect.settings import db_connect
 
 
-from typing import Tuple, List, Union, Dict
+from typing import Tuple, List, Union, Dict, Optional, Any, cast
 
+from os import getenv
 import os
 from itertools import chain
 
@@ -655,4 +656,3 @@ def get_table_count(table_name: str, debug: bool = False) -> int:
             my_cursor.close()
         if db:
             db.close()
-
