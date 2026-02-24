@@ -16,9 +16,10 @@ except ImportError:
     from connect.settings import db_connect
 
 
-from typing import Tuple, List, Union, Dict
+from typing import Tuple, List, Union, Dict, Optional, Any
 
 import os
+from os import getenv
 from itertools import chain
 
 POOL_SIZE = int(getenv("MYSQL_POOL_SIZE", "20"))
@@ -49,7 +50,7 @@ def _get_pool(
             port=port,
             auth_plugin="mysql_native_password",
         )
-    return cast(pooling.MySQLConnectionPool, _db_pool)
+    return _db_pool
 
 
 def connect(
@@ -62,27 +63,9 @@ def connect(
     """
     Get a connection from the pool, initializing it if necessary.
     """
-    global DB_POOL
-    if DB_POOL is None:
-        try:
-            DB_POOL = pooling.MySQLConnectionPool(
-                pool_name="ithemba_pool",
-                pool_size=20,  # Reasonable size for the pool
-                pool_reset_session=True,
-                host=host,
-                user=user,
-                password=password,
-                database=database,
-                port=port,
-                auth_plugin='mysql_native_password'
-            )
-            logging.info("Initialized MySQL Connection Pool")
-        except Exception as e:
-            logging.error(f"Failed to initialize connection pool: {e}")
-            raise
-
+    pool = _get_pool(host, user, password, database, port)
     try:
-        return DB_POOL.get_connection()
+        return pool.get_connection()
     except PoolError as e:
         logging.error(f"Connection pool exhausted: {e}")
         raise
@@ -655,4 +638,3 @@ def get_table_count(table_name: str, debug: bool = False) -> int:
             my_cursor.close()
         if db:
             db.close()
-
